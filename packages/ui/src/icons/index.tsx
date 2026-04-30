@@ -25,8 +25,8 @@ export * from "./photo";
 export * from "./sort-order";
 export * from "./success";
 export * from "./tick";
-export * from "./verified-badge";
 export * from "./user-clock";
+export * from "./verified-badge";
 
 // loaders
 export * from "./loading-circle";
@@ -35,6 +35,7 @@ export * from "./loading-spinner";
 
 // brand logos
 export * from "./anthropic";
+export * from "./beehiiv";
 export * from "./bing";
 export * from "./facebook";
 export * from "./github";
@@ -45,6 +46,7 @@ export * from "./openai";
 export * from "./product-hunt";
 export * from "./reddit";
 export * from "./slack";
+export * from "./slack-colorful";
 export * from "./tiktok";
 export * from "./twitter";
 export * from "./unsplash";

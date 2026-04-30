@@ -1,9 +1,10 @@
 "use server";
 
-import { recordAuditLog } from "@/lib/api/audit-logs/record-audit-log";
+import { trackActivityLog } from "@/lib/api/activity-log/track-activity-log";
 import { getGroupOrThrow } from "@/lib/api/groups/get-group-or-throw";
 import { getDefaultProgramIdOrThrow } from "@/lib/api/programs/get-default-program-id-or-throw";
 import { triggerWorkflows } from "@/lib/cron/qstash-workflow";
+import { throwIfTrialProgramEnrollmentLimitExceeded } from "@/lib/partners/throw-if-trial-program-enrollment-exceeded";
 import { bulkApprovePartnersSchema } from "@/lib/zod/schemas/partners";
 import { prisma } from "@dub/prisma";
 import { waitUntil } from "@vercel/functions";
@@ -49,6 +50,13 @@ export const bulkApprovePartnersAction = authActionClient
     const now = new Date();
 
     await prisma.$transaction(async (tx) => {
+      await throwIfTrialProgramEnrollmentLimitExceeded({
+        programId: program.id,
+        additionalEnrollments: programEnrollments.length,
+        trialEndsAt: workspace.trialEndsAt,
+        tx,
+      });
+
       await tx.programEnrollment.updateMany({
         where: {
           id: {
@@ -102,20 +110,20 @@ export const bulkApprovePartnersAction = authActionClient
         });
 
         await Promise.allSettled([
-          recordAuditLog(
-            updatedEnrollments.map(({ partner }) => ({
+          trackActivityLog(
+            updatedEnrollments.map(({ partnerId }) => ({
               workspaceId: workspace.id,
               programId: program.id,
+              resourceType: "partner",
+              resourceId: partnerId,
+              userId: user.id,
               action: "partner_application.approved",
-              description: `Partner application approved for ${partner.id}`,
-              actor: user,
-              targets: [
-                {
-                  type: "partner",
-                  id: partner.id,
-                  metadata: partner,
+              changeSet: {
+                status: {
+                  old: "pending",
+                  new: "approved",
                 },
-              ],
+              },
             })),
           ),
 

@@ -27,10 +27,11 @@ export const invitePartnerFromNetworkAction = authActionClient
 
     const networkInvitesUsage = await getNetworkInvitesUsage(workspace);
 
-    if (networkInvitesUsage >= workspace.networkInvitesLimit)
+    if (networkInvitesUsage >= workspace.networkInvitesLimit) {
       throw new Error(
         "You have reached your partner network invitations limit.",
       );
+    }
 
     const { partnerId, groupId } = parsedInput;
 
@@ -92,7 +93,7 @@ export const invitePartnerFromNetworkAction = authActionClient
       Promise.allSettled([
         (async () => {
           if (!partner.email) return;
-          const rewardsAndBounties = await getGroupRewardsAndBounties({
+          const { rewards, bounties } = await getGroupRewardsAndBounties({
             programId,
             groupId: enrolledPartner.groupId || program.defaultGroupId,
           });
@@ -107,8 +108,10 @@ export const invitePartnerFromNetworkAction = authActionClient
                 name: program.name,
                 slug: program.slug,
                 logo: program.logo,
+                website: program.url,
               },
-              ...rewardsAndBounties,
+              rewards,
+              bounties,
             }),
           });
         })(),

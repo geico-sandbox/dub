@@ -5,7 +5,7 @@ import { detectAndRecordFraudEvent } from "@/lib/api/fraud/detect-record-fraud-e
 import { includeTags } from "@/lib/api/links/include-tags";
 import { generateRandomName } from "@/lib/names";
 import { createPartnerCommission } from "@/lib/partners/create-partner-commission";
-import { sendPartnerPostback } from "@/lib/postback/api/send-partner-postback";
+import { sendPartnerPostback } from "@/lib/postback/send-partner-postback";
 import { isStored, storage } from "@/lib/storage";
 import {
   getClickEvent,
@@ -13,7 +13,6 @@ import {
   recordLead,
   recordSale,
 } from "@/lib/tinybird";
-import { logConversionEvent } from "@/lib/tinybird/log-conversion-events";
 import {
   ClickEventTB,
   CustomerSource,
@@ -40,7 +39,6 @@ import { syncPartnerLinksStats } from "../partners/sync-partner-links-stats";
 import { executeWorkflows } from "../workflows/execute-workflows";
 
 type TrackSaleParams = z.input<typeof trackSaleRequestSchema> & {
-  rawBody: any;
   workspace: Pick<WorkspaceProps, "id" | "stripeConnectId" | "webhookEnabled">;
   source?: CustomerSource; // default is "tracked"
 };
@@ -58,7 +56,6 @@ export const trackSale = async ({
   invoiceId,
   leadEventName,
   metadata,
-  rawBody,
   workspace,
   source = "tracked",
 }: TrackSaleParams) => {
@@ -96,15 +93,6 @@ export const trackSale = async ({
     if (!leadEvent) {
       const errorMessage = `Lead event not found for externalId: ${customerExternalId} and leadEventName: ${leadEventName}`;
 
-      waitUntil(
-        logConversionEvent({
-          workspace_id: workspace.id,
-          path: "/track/sale",
-          body: JSON.stringify(rawBody),
-          error: errorMessage,
-        }),
-      );
-
       throw new DubApiError({
         code: "not_found",
         message: errorMessage,
@@ -119,15 +107,6 @@ export const trackSale = async ({
 
   // If no existing customer is found and no clickId is provided, return an error
   if (!existingCustomer && !clickId) {
-    waitUntil(
-      logConversionEvent({
-        workspace_id: workspace.id,
-        path: "/track/sale",
-        body: JSON.stringify(rawBody),
-        error: `No existing customer with the provided customerExternalId (${customerExternalId}) was found, and there was no clickId provided for direct sale tracking.`,
-      }),
-    );
-
     return {
       eventName,
       customer: null,
@@ -259,15 +238,6 @@ export const trackSale = async ({
 
   // This should never happen, but just in case
   if (!customer) {
-    waitUntil(
-      logConversionEvent({
-        workspace_id: workspace.id,
-        path: "/track/sale",
-        body: JSON.stringify(rawBody),
-        error: `Customer not found for customerExternalId: ${customerExternalId}`,
-      }),
-    );
-
     return {
       eventName,
       customer: null,
@@ -290,7 +260,6 @@ export const trackSale = async ({
       paymentProcessor,
       invoiceId,
       metadata,
-      rawBody,
       workspace,
       leadEventData,
       customer,
@@ -416,7 +385,6 @@ const _trackSale = async ({
   paymentProcessor,
   invoiceId,
   metadata,
-  rawBody,
   workspace,
   leadEventData,
   customer,
@@ -434,15 +402,6 @@ const _trackSale = async ({
 
   // Skip if amount is 0 or less
   if (amount <= 0) {
-    waitUntil(
-      logConversionEvent({
-        workspace_id: workspace.id,
-        path: "/track/sale",
-        body: JSON.stringify(rawBody),
-        error: `Sale amount is ${amount}, skipping...`,
-      }),
-    );
-
     return {
       eventName,
       customer: null,
@@ -522,14 +481,6 @@ const _trackSale = async ({
               increment: 1,
             },
           },
-        }),
-
-        // Log conversion event
-        logConversionEvent({
-          workspace_id: workspace.id,
-          link_id: saleData.link_id,
-          path: "/track/sale",
-          body: JSON.stringify(rawBody),
         }),
       ]);
 

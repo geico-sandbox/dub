@@ -10,13 +10,12 @@ export const getFeatureFlags = async ({
 }: {
   workspaceId?: string;
   workspaceSlug?: string;
-}) => {
+}): Promise<Record<BetaFeatures, boolean>> => {
   if (workspaceId) {
     workspaceId = prefixWorkspaceId(workspaceId);
   }
 
   const workspaceFeatures: Record<BetaFeatures, boolean> = {
-    noDubLink: false,
     analyticsSettingsSiteVisitTracking: false,
   };
 
@@ -24,7 +23,7 @@ export const getFeatureFlags = async ({
     // return all features as true if edge config is not available
     return Object.fromEntries(
       Object.entries(workspaceFeatures).map(([key, _v]) => [key, true]),
-    );
+    ) as Record<BetaFeatures, boolean>;
   } else if (!workspaceId && !workspaceSlug) {
     return workspaceFeatures;
   }

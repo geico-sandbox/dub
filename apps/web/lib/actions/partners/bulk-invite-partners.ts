@@ -6,6 +6,7 @@ import { bulkCreateLinks } from "@/lib/api/links";
 import { getGroupRewardsAndBounties } from "@/lib/api/partners/get-group-rewards-and-bounties";
 import { getDefaultProgramIdOrThrow } from "@/lib/api/programs/get-default-program-id-or-throw";
 import { extractUtmParams } from "@/lib/api/utm/extract-utm-params";
+import { throwIfTrialProgramEnrollmentLimitExceeded } from "@/lib/partners/throw-if-trial-program-enrollment-exceeded";
 import { DEFAULT_PARTNER_GROUP } from "@/lib/zod/schemas/groups";
 import { bulkInvitePartnersSchema } from "@/lib/zod/schemas/partners";
 import { sendBatchEmail } from "@dub/email";
@@ -91,14 +92,25 @@ export const bulkInvitePartnersAction = authActionClient
       throw new Error("Invalid group ID provided.");
     }
 
-    const { count: createdPartnersCount } = await prisma.partner.createMany({
-      data: emailsToInvite.map((email) => ({
-        id: createId({ prefix: "pn_" }),
-        email,
-        name: email,
-      })),
-      skipDuplicates: true,
-    });
+    const { count: createdPartnersCount } = await prisma.$transaction(
+      async (tx) => {
+        await throwIfTrialProgramEnrollmentLimitExceeded({
+          programId,
+          additionalEnrollments: emailsToInvite.length,
+          trialEndsAt: workspace.trialEndsAt,
+          tx,
+        });
+
+        return tx.partner.createMany({
+          data: emailsToInvite.map((email) => ({
+            id: createId({ prefix: "pn_" }),
+            email,
+            name: email,
+          })),
+          skipDuplicates: true,
+        });
+      },
+    );
 
     console.log(
       `Created ${createdPartnersCount} out of ${emailsToInvite.length} provided partners (${emailsToInvite.length - createdPartnersCount} already exist on Dub)`,
@@ -168,7 +180,7 @@ export const bulkInvitePartnersAction = authActionClient
           );
         }
 
-        const rewardsAndBounties = await getGroupRewardsAndBounties({
+        const { rewards, bounties } = await getGroupRewardsAndBounties({
           programId,
           groupId: groupId || program.defaultGroupId,
         });
@@ -195,13 +207,15 @@ export const bulkInvitePartnersAction = authActionClient
                 name: program.name,
                 slug: program.slug,
                 logo: program.logo,
+                website: program.url,
               },
               ...(inviteEmailData?.subject && {
                 subject: inviteEmailData.subject,
               }),
               ...(inviteEmailData?.title && { title: inviteEmailData.title }),
               ...(inviteEmailData?.body && { body: inviteEmailData.body }),
-              ...rewardsAndBounties,
+              rewards,
+              bounties,
             }),
           })),
         );
